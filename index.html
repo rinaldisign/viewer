@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rinaldisign 360 Viewer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pannellum/2.5.6/pannellum.css">
+<style>
+  :root{
+    --bg:#0e1013;
+    --bg2:#161a20;
+    --line:#e9edf2;
+    --muted:#8a94a3;
+    --accent:#7fd1c7;
+    --glass:rgba(20,24,30,.72);
+    --font:"Inter","Helvetica Neue",Arial,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--line);font-family:var(--font);overflow:hidden}
+
+  /* ---------- Viewer ---------- */
+  #viewer{position:fixed;inset:0;background:var(--bg)}
+  .stage-empty{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(ellipse at 50% 55%,#1b2028 0%,var(--bg) 65%);
+    transition:opacity .5s;
+  }
+  .stage-empty.hidden{opacity:0;pointer-events:none}
+  .stage-empty svg{width:min(56vmin,420px);height:auto;opacity:.35}
+  .stage-empty p{position:absolute;top:calc(50% + min(30vmin,225px));font-size:14px;color:var(--muted);text-align:center;padding:0 24px;letter-spacing:.02em}
+
+  /* ---------- Header ---------- */
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:20;
+    display:flex;align-items:center;gap:12px;
+    padding:calc(14px + env(safe-area-inset-top,0px)) 20px 28px;
+    background:linear-gradient(to bottom,rgba(10,12,15,.78),rgba(10,12,15,0));
+    pointer-events:none;
+  }
+  .logo{width:32px;height:32px;display:grid;place-items:center}
+  .logo img{width:100%;height:100%;object-fit:contain}
+  .brand{font-size:15px;font-weight:500;letter-spacing:.14em}
+  .brand span{font-weight:300;color:var(--muted);margin-left:.5em}
+
+  /* ---------- Buttons (kiri bawah) ---------- */
+  .actions{
+    position:fixed;left:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:20;
+    display:flex;gap:10px;flex-wrap:wrap;
+  }
+  .btn{
+    appearance:none;border:1px solid rgba(233,237,242,.22);background:var(--glass);
+    color:var(--line);font:500 13px/1 var(--font);letter-spacing:.04em;
+    padding:13px 18px;border-radius:8px;cursor:pointer;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    display:inline-flex;align-items:center;gap:9px;
+    transition:border-color .2s,background .2s,transform .2s;
+  }
+  .btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .btn:hover:not(:disabled){border-color:var(--accent);background:rgba(28,34,42,.9)}
+  .btn:active:not(:disabled){transform:translateY(1px)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.primary{border-color:var(--accent);color:var(--accent)}
+  .toast{
+    position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+    z-index:25;background:var(--glass);border:1px solid rgba(233,237,242,.2);
+    padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .3s;
+    backdrop-filter:blur(10px);max-width:88vw;text-align:center
+  }
+  .toast.show{opacity:1}
+  .drop{position:fixed;inset:12px;z-index:30;border:1.5px dashed var(--accent);border-radius:14px;background:rgba(14,16,19,.7);
+    display:none;align-items:center;justify-content:center;font-size:16px;letter-spacing:.06em;pointer-events:none}
+  .drop.show{display:flex}
+
+  /* ---------- Intro SVG (3 detik) ---------- */
+  #intro{
+    position:fixed;inset:0;z-index:100;background:var(--bg);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:opacity .7s ease,visibility .7s;
+  }
+  #intro.done{opacity:0;visibility:hidden}
+  #intro svg{width:min(88vw,760px);height:auto;overflow:visible}
+  .ln{fill:none;stroke:var(--line);stroke-linecap:round;stroke-linejoin:round}
+  .draw{stroke-dasharray:1000;stroke-dashoffset:1000}
+  .t1,.t2{fill:var(--line);fill-opacity:0}
+  .t1{font:200 76px/1 var(--font);letter-spacing:.16em;stroke:var(--line);stroke-width:1.1;stroke-dasharray:420;stroke-dashoffset:420}
+  .t2{font:300 17px/1 var(--font);letter-spacing:.55em;stroke:var(--accent);stroke-width:.7;stroke-dasharray:120;stroke-dashoffset:120}
+  .ring{stroke-width:1.2}
+  .ring2{stroke:var(--accent);stroke-width:1}
+  .rule{stroke:var(--accent);stroke-width:1}
+
+  /* total 3 detik */
+  .a-ring{animation:draw 1.3s cubic-bezier(.65,0,.35,1) .05s forwards}
+  .a-ring2{animation:draw 1.1s cubic-bezier(.65,0,.35,1) .35s forwards}
+  .a-eq{animation:draw 1s cubic-bezier(.65,0,.35,1) .6s forwards}
+  .a-t1{animation:draw 1.5s cubic-bezier(.65,0,.35,1) .6s forwards, fillin .6s ease 2.2s forwards}
+  .a-rule{animation:draw .9s cubic-bezier(.65,0,.35,1) 1.5s forwards}
+  .a-t2{animation:draw 1.1s cubic-bezier(.65,0,.35,1) 1.7s forwards, fillin2 .5s ease 2.5s forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes fillin{to{fill-opacity:1;stroke-opacity:.0}}
+  @keyframes fillin2{to{fill-opacity:1;stroke-opacity:0}}
+
+  @media (prefers-reduced-motion:reduce){
+    .draw,.t1,.t2{animation-duration:.01s!important;animation-delay:0s!important}
+  }
+  @media (max-width:520px){
+    .btn{padding:12px 14px;font-size:12px}
+    .actions{left:12px;right:12px}
+    .brand{font-size:13px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Opening: garis membentuk teks 360 VIEWER BY RINALDISIGN -->
+<div id="intro" role="img" aria-label="360 Viewer by Rinaldisign" title="Klik untuk lewati">
+  <svg viewBox="0 0 800 360" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(400 82)">
+      <circle class="ln ring draw a-ring" r="52"/>
+      <ellipse class="ln ring2 draw a-ring2" rx="52" ry="20"/>
+      <ellipse class="ln ring2 draw a-eq" rx="20" ry="52"/>
+    </g>
+    <text class="t1 a-t1" x="400" y="238" text-anchor="middle">360 VIEWER</text>
+    <line class="ln rule draw a-rule" x1="250" y1="268" x2="550" y2="268"/>
+    <text class="t2 a-t2" x="400" y="306" text-anchor="middle">BY RINALDISIGN</text>
+  </svg>
+</div>
+
+<div id="viewer"></div>
+
+<div class="stage-empty" id="empty">
+  <svg viewBox="0 0 200 200" fill="none" stroke="#e9edf2" stroke-width="1" aria-hidden="true">
+    <circle cx="100" cy="100" r="90"/>
+    <ellipse cx="100" cy="100" rx="90" ry="34"/>
+    <ellipse cx="100" cy="100" rx="34" ry="90"/>
+    <ellipse cx="100" cy="100" rx="62" ry="90"/>
+    <line x1="10" y1="100" x2="190" y2="100"/>
+  </svg>
+  <p>Belum ada gambar. Pilih foto panorama 360 (equirectangular) atau tarik ke sini.</p>
+</div>
+
+<header>
+  <div class="logo" id="logo">
+    <!-- Ganti dengan file logomu: simpan sebagai logo.png di folder yang sama -->
+    <img src="logo.png" alt="Logo Rinaldisign" onerror="this.replaceWith(fallbackLogo())">
+  </div>
+  <div class="brand">RINALDISIGN<span>360 VIEWER</span></div>
+</header>
+
+<div class="actions">
+  <button class="btn primary" id="btnAdd" type="button">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Masukkan gambar 360
+  </button>
+  <button class="btn" id="btnChange" type="button" disabled>
+    <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15"/><path d="M4 20v-5h5"/></svg>Ganti gambar
+  </button>
+</div>
+
+<input type="file" id="file" accept="image/*" hidden>
+<div class="toast" id="toast"></div>
+<div class="drop" id="drop">Lepaskan gambar 360 di sini</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pannellum/2.5.6/pannellum.js"></script>
+<script>
+  /* Logo cadangan bila logo.png belum ada */
+  function fallbackLogo(){
+    const ns='http://www.w3.org/2000/svg';
+    const s=document.createElementNS(ns,'svg');
+    s.setAttribute('viewBox','0 0 32 32');s.setAttribute('width','32');s.setAttribute('height','32');
+    s.innerHTML='<circle cx="16" cy="16" r="13" fill="none" stroke="#e9edf2" stroke-width="1.4"/><ellipse cx="16" cy="16" rx="13" ry="5" fill="none" stroke="#7fd1c7" stroke-width="1.2"/>';
+    return s;
+  }
+
+  /* Intro */
+  const intro=document.getElementById('intro');
+  const endIntro=()=>{intro.classList.add('done');setTimeout(()=>intro.remove(),800)};
+  setTimeout(endIntro,3300);
+  intro.addEventListener('click',endIntro);
+
+  /* Viewer */
+  const fileInput=document.getElementById('file');
+  const btnAdd=document.getElementById('btnAdd');
+  const btnChange=document.getElementById('btnChange');
+  const empty=document.getElementById('empty');
+  const toastEl=document.getElementById('toast');
+  const drop=document.getElementById('drop');
+  let viewer=null,currentUrl=null,tt;
+
+  function toast(msg){
+    toastEl.textContent=msg;toastEl.classList.add('show');
+    clearTimeout(tt);tt=setTimeout(()=>toastEl.classList.remove('show'),3200);
+  }
+
+  function loadImage(file){
+    if(!file||!file.type.startsWith('image/')){toast('File harus berupa gambar (JPG, PNG, WebP).');return}
+    const url=URL.createObjectURL(file);
+    if(viewer){try{viewer.destroy()}catch(e){}viewer=null}
+    if(currentUrl)URL.revokeObjectURL(currentUrl);
+    currentUrl=url;
+    viewer=pannellum.viewer('viewer',{
+      type:'equirectangular',
+      panorama:url,
+      autoLoad:true,
+      showControls:true,
+      compass:false,
+      hfov:100,
+      minHfov:40,
+      maxHfov:120,
+      autoRotate:-2,
+      autoRotateInactivityDelay:4000,
+      mouseZoom:true
+    });
+    viewer.on('load',()=>{empty.classList.add('hidden');btnChange.disabled=false});
+    viewer.on('error',msg=>{
+      toast('Gambar tidak bisa dibuka: '+msg);
+      btnChange.disabled=!currentUrl;
+    });
+  }
+
+  const pick=()=>{fileInput.value='';fileInput.click()};
+  btnAdd.addEventListener('click',pick);
+  btnChange.addEventListener('click',pick);
+  fileInput.addEventListener('change',e=>loadImage(e.target.files[0]));
+
+  /* Drag & drop */
+  let dragDepth=0;
+  addEventListener('dragenter',e=>{e.preventDefault();dragDepth++;drop.classList.add('show')});
+  addEventListener('dragleave',e=>{e.preventDefault();if(--dragDepth<=0){dragDepth=0;drop.classList.remove('show')}});
+  addEventListener('dragover',e=>e.preventDefault());
+  addEventListener('drop',e=>{
+    e.preventDefault();dragDepth=0;drop.classList.remove('show');
+    loadImage(e.dataTransfer.files[0]);
+  });
+</script>
+</body>
+</html>
